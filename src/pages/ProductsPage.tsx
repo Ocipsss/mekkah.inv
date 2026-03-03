@@ -1,0 +1,199 @@
+import React, { useState, useRef, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useLiveQuery } from 'dexie-react-hooks';
+import { db_local } from '@/lib/db';
+import { getCookie } from '@/lib/auth';
+import {
+  Search, PackageSearch, MapPin, ChevronRight,
+  Loader2, X, Trash2, Edit3
+} from "lucide-react";
+
+export default function ProductsPage() {
+  const navigate = useNavigate();
+  const [searchTerm, setSearchTerm] = useState("");
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const suggestionRef = useRef<HTMLDivElement>(null);
+  const [selectedProduct, setSelectedProduct] = useState<any>(null);
+  const [userRole, setUserRole] = useState<string | null>(null);
+
+  const products = useLiveQuery(() => db_local.products.toArray());
+
+  useEffect(() => {
+    setUserRole(getCookie('user-role'));
+  }, []);
+
+  const filteredProducts = products?.filter(p =>
+    p.nama.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    p.kode.toLowerCase().includes(searchTerm.toLowerCase())
+  ).reverse() || [];
+
+  const suggestions = searchTerm.length > 0
+    ? products?.filter(p =>
+      p.nama.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      p.kode.toLowerCase().includes(searchTerm.toLowerCase())
+    ).slice(0, 5)
+    : [];
+
+  const handleDelete = async (id: number) => {
+    if (confirm("⚠️ Hapus barang ini dari gudang?")) {
+      try {
+        await db_local.products.delete(id);
+        setSelectedProduct(null);
+      } catch {
+        alert("Gagal menghapus data.");
+      }
+    }
+  };
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (suggestionRef.current && !suggestionRef.current.contains(e.target as Node)) {
+        setShowSuggestions(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  if (!products) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[60vh]">
+        <Loader2 className="animate-spin text-blue-600" size={32} />
+        <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mt-4">Sinkronisasi Gudang...</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="p-2 pb-24 max-w-5xl mx-auto space-y-3">
+      <div className="sticky top-2 z-[100]" ref={suggestionRef}>
+        <div className="relative group">
+          <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-blue-600 transition-colors" size={16} />
+          <input
+            type="text"
+            placeholder="Cari Produk atau SKU..."
+            className={`w-full p-3.5 pl-11 bg-white border border-slate-100 outline-none shadow-md text-xs font-bold transition-all ${showSuggestions && suggestions?.length ? "rounded-t-xl" : "rounded-xl"} focus:ring-2 focus:ring-blue-500`}
+            value={searchTerm}
+            onChange={(e) => { setSearchTerm(e.target.value); setShowSuggestions(true); }}
+            onFocus={() => setShowSuggestions(true)}
+          />
+          {searchTerm && (
+            <button onClick={() => { setSearchTerm(""); setShowSuggestions(false); }} className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-300 hover:text-slate-500">
+              <X size={14} />
+            </button>
+          )}
+        </div>
+        {showSuggestions && suggestions && suggestions.length > 0 && (
+          <div className="absolute top-full left-0 w-full bg-white border-x border-b border-slate-100 rounded-b-xl shadow-2xl z-50 overflow-hidden">
+            {suggestions.map((p) => (
+              <div key={p.id} onClick={() => { setSearchTerm(p.nama); setShowSuggestions(false); setSelectedProduct(p); }}
+                className="px-4 py-3 hover:bg-blue-50 flex items-center justify-between cursor-pointer border-t border-slate-50 transition-colors">
+                <div className="flex flex-col">
+                  <span className="text-[11px] font-bold text-slate-700 uppercase">{p.nama}</span>
+                  <span className="text-[9px] text-slate-400 font-bold uppercase">{p.kode}</span>
+                </div>
+                <span className="text-[9px] bg-orange-100 text-orange-600 px-2 py-0.5 rounded font-black">{p.lokasi}</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
+        {filteredProducts.length > 0 ? filteredProducts.map((product) => (
+          <div key={product.id} onClick={() => setSelectedProduct(product)}
+            className="bg-white p-3 rounded-xl border border-slate-100 shadow-sm flex items-center gap-3 active:scale-[0.98] transition-all cursor-pointer hover:border-blue-300 group">
+            <div className={`w-11 h-11 rounded-lg flex flex-col items-center justify-center border shrink-0 ${product.stok <= 5 ? 'bg-red-50 border-red-100 text-red-600' : 'bg-slate-50 border-slate-100 text-blue-600'}`}>
+              <span className="text-[7px] font-black uppercase opacity-60">STOK</span>
+              <span className="text-sm font-black leading-none">{product.stok}</span>
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-1.5 mb-0.5">
+                <span className="text-[8px] font-black bg-orange-50 text-orange-600 px-1.5 py-0.5 rounded uppercase tracking-wider">{product.lokasi}</span>
+                <span className="text-[8px] font-bold text-slate-300 uppercase truncate">{product.penerbit}</span>
+              </div>
+              <h3 className="font-bold text-slate-800 text-[11px] truncate uppercase leading-tight group-hover:text-blue-600 transition-colors">{product.nama}</h3>
+              <p className="text-[10px] font-black text-slate-900 mt-1">
+                {new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(product.hargaJual)}
+              </p>
+            </div>
+            <ChevronRight size={14} className="text-slate-200 group-hover:text-blue-400 transition-colors" />
+          </div>
+        )) : (
+          <div className="col-span-full text-center py-16 bg-white rounded-xl border-2 border-dashed border-slate-100">
+            <PackageSearch className="mx-auto text-slate-200 mb-2" size={40} />
+            <p className="text-slate-400 font-bold text-[10px] uppercase tracking-widest">Gudang Kosong / Tidak Ditemukan</p>
+          </div>
+        )}
+      </div>
+
+      {selectedProduct && (
+        <div className="fixed inset-0 z-[200] flex items-end sm:items-center justify-center p-2 sm:p-4">
+          <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={() => setSelectedProduct(null)} />
+          <div className="relative bg-white w-full max-w-md rounded-t-[2rem] sm:rounded-xl shadow-2xl overflow-hidden">
+            <div className="h-1.5 w-12 bg-slate-100 rounded-full mx-auto mt-3 sm:hidden" />
+            <div className="p-5">
+              <div className="flex justify-between items-start mb-4">
+                <div className="space-y-1">
+                  <span className="text-[9px] font-black bg-blue-50 text-blue-600 px-2 py-0.5 rounded uppercase">{selectedProduct.kode}</span>
+                  <h2 className="text-sm font-black text-slate-800 uppercase leading-tight pr-4">{selectedProduct.nama}</h2>
+                </div>
+                <button onClick={() => setSelectedProduct(null)} className="p-2 hover:bg-slate-50 rounded-lg text-slate-400">
+                  <X size={18} />
+                </button>
+              </div>
+              <div className="grid grid-cols-2 gap-2 mb-4">
+                <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
+                  <p className="text-[8px] font-bold text-slate-400 uppercase mb-1">Status Stok</p>
+                  <p className="text-lg font-black text-slate-800">{selectedProduct.stok} <span className="text-[10px] text-slate-400 uppercase">Unit</span></p>
+                </div>
+                <div className="bg-orange-50 p-3 rounded-xl border border-orange-100">
+                  <p className="text-[8px] font-bold text-orange-400 uppercase mb-1">Posisi Rak</p>
+                  <p className="text-lg font-black text-orange-600 uppercase">{selectedProduct.lokasi}</p>
+                </div>
+              </div>
+              <div className="bg-slate-50/50 rounded-xl p-3 border border-slate-100 space-y-2 mb-5">
+                <div className="flex justify-between text-[10px] font-bold uppercase">
+                  <span className="text-slate-400">Supplier</span>
+                  <span className="text-slate-700">{selectedProduct.penerbit}</span>
+                </div>
+                <div className="flex justify-between text-[10px] font-bold uppercase">
+                  <span className="text-slate-400">Kategori</span>
+                  <span className="text-slate-700">{selectedProduct.kategori}</span>
+                </div>
+                <div className="flex justify-between items-center py-2 border-t border-dashed border-slate-200">
+                  <span className="text-[10px] font-black text-slate-400 uppercase">Harga Modal</span>
+                  <span className="text-xs font-bold text-rose-600 italic">
+                    {new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(selectedProduct.hargaModal)}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center pt-2 border-t border-slate-100">
+                  <span className="text-[10px] font-black text-slate-400 uppercase">Harga Jual</span>
+                  <span className="text-base font-black text-blue-600">
+                    {new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(selectedProduct.hargaJual)}
+                  </span>
+                </div>
+              </div>
+              {userRole === 'admin' ? (
+                <div className="flex gap-2">
+                  <button onClick={() => navigate(`/products/edit/${selectedProduct.id}`)}
+                    className="flex-1 bg-slate-900 text-white py-3.5 rounded-xl font-black text-[10px] uppercase tracking-widest flex items-center justify-center gap-2 active:scale-95 transition-all shadow-lg">
+                    <Edit3 size={14} /> Edit Barang
+                  </button>
+                  <button onClick={() => handleDelete(selectedProduct.id)}
+                    className="w-12 bg-red-50 text-red-500 rounded-xl flex items-center justify-center border border-red-100 active:scale-95 transition-all">
+                    <Trash2 size={18} />
+                  </button>
+                </div>
+              ) : (
+                <button onClick={() => setSelectedProduct(null)} className="w-full bg-slate-900 text-white py-3.5 rounded-xl font-black text-[10px] uppercase tracking-widest">
+                  Selesai
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}

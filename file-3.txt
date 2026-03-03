@@ -1,0 +1,606 @@
+### src/pages/AddProductPage.tsx ###
+import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useLiveQuery } from 'dexie-react-hooks';
+import { db_local } from '@/lib/db';
+import { PackagePlus, Barcode, MapPin, Wallet, Save, Layers } from "lucide-react";
+
+export default function AddProductPage() {
+  const navigate = useNavigate();
+  const [loading, setLoading] = useState(false);
+  const [searchLoc, setSearchLoc] = useState("");
+  const [showLocList, setShowLocList] = useState(false);
+
+  const categories = useLiveQuery(() => db_local.categories.orderBy('nama').toArray());
+  const publishers = useLiveQuery(() => db_local.publishers.orderBy('nama').toArray());
+  const locations = useLiveQuery(() => db_local.locations.orderBy('nama').toArray());
+
+  const filteredLocations = locations?.filter(l =>
+    l.nama.toLowerCase().includes(searchLoc.toLowerCase())
+  );
+
+  const [formData, setFormData] = useState({
+    nama: "", kode: "", penerbit: "", kategori: "",
+    lokasi: "", hargaModal: "", hargaJual: "", stok: "", deskripsi: ""
+  });
+
+  const formatNumber = (value: string) => {
+    const number = value.replace(/\D/g, "");
+    return number.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+  };
+  const parseNumber = (value: string) => Number(value.replace(/\./g, ""));
+
+  const generateSKU = () => {
+    const randomNum = Math.floor(100000 + Math.random() * 900000);
+    setFormData(prev => ({ ...prev, kode: `TM-${randomNum}` }));
+  };
+
+  const resetForm = () => {
+    setFormData({
+      nama: "", kode: `TM-${Math.floor(100000 + Math.random() * 900000)}`,
+      penerbit: "", kategori: "", lokasi: "",
+      hargaModal: "", hargaJual: "", stok: "", deskripsi: ""
+    });
+    setSearchLoc("");
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  useEffect(() => { generateSKU(); }, []);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!formData.kategori || !formData.penerbit || !formData.lokasi) {
+      alert("Lengkapi kategori, penerbit, dan lokasi!");
+      return;
+    }
+    setLoading(true);
+    try {
+      await db_local.products.add({
+        nama: formData.nama.toUpperCase(),
+        kode: formData.kode,
+        penerbit: formData.penerbit.toUpperCase(),
+        kategori: formData.kategori.toUpperCase(),
+        lokasi: formData.lokasi.toUpperCase(),
+        hargaModal: formData.hargaModal ? parseNumber(formData.hargaModal) : 0,
+        hargaJual: formData.hargaJual ? parseNumber(formData.hargaJual) : 0,
+        stok: Number(formData.stok) || 0,
+        deskripsi: formData.deskripsi,
+        updatedAt: Date.now()
+      });
+      alert("Berhasil disimpan!");
+      resetForm();
+    } catch {
+      alert("Gagal menyimpan data.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="p-2 pb-24 max-w-4xl mx-auto">
+      <form onSubmit={handleSubmit} className="space-y-3">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div className="space-y-2">
+            <div className="flex items-center gap-2 text-blue-600 px-2">
+              <PackagePlus size={16} />
+              <span className="text-[10px] font-black uppercase tracking-widest">Identitas Produk</span>
+            </div>
+            <div className="bg-white p-3 rounded-xl border border-slate-100 shadow-sm space-y-3">
+              <div>
+                <label className="text-[9px] font-bold text-slate-400 uppercase ml-1">Nama Produk</label>
+                <input required type="text" placeholder="NAMA BARANG..."
+                  className="w-full mt-1 p-3 bg-slate-50 border-none rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-xs font-bold uppercase"
+                  value={formData.nama} onChange={(e) => setFormData({ ...formData, nama: e.target.value.toUpperCase() })} />
+              </div>
+              <div>
+                <label className="text-[9px] font-bold text-slate-400 uppercase ml-1">SKU / Kode (Auto)</label>
+                <div className="relative mt-1">
+                  <Barcode className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-300" size={16} />
+                  <input readOnly type="text" className="w-full p-3 pl-10 bg-slate-100 border-none rounded-xl text-xs font-mono font-bold text-blue-600 outline-none" value={formData.kode} />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <div className="flex items-center gap-2 text-orange-600 px-2">
+              <Layers size={16} />
+              <span className="text-[10px] font-black uppercase tracking-widest">Klasifikasi & Lokasi</span>
+            </div>
+            <div className="bg-white p-3 rounded-xl border border-slate-100 shadow-sm space-y-3">
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-[9px] font-bold text-slate-400 uppercase ml-1">Kategori</label>
+                  <select required className="w-full mt-1 p-3 bg-slate-50 border-none rounded-xl outline-none focus:ring-2 focus:ring-orange-500 text-[11px] font-bold uppercase"
+                    value={formData.kategori} onChange={(e) => setFormData({ ...formData, kategori: e.target.value })}>
+                    <option value="">PILIH...</option>
+                    {categories?.map((cat) => <option key={cat.id} value={cat.nama}>{cat.nama}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="text-[9px] font-bold text-slate-400 uppercase ml-1">Penerbit</label>
+                  <select required className="w-full mt-1 p-3 bg-slate-50 border-none rounded-xl outline-none focus:ring-2 focus:ring-orange-500 text-[11px] font-bold uppercase"
+                    value={formData.penerbit} onChange={(e) => setFormData({ ...formData, penerbit: e.target.value })}>
+                    <option value="">PILIH...</option>
+                    {publishers?.map((pub) => <option key={pub.id} value={pub.nama}>{pub.nama}</option>)}
+                  </select>
+                </div>
+              </div>
+              <div className="relative">
+                <label className="text-[9px] font-bold text-slate-400 uppercase ml-1">Titik Rak</label>
+                <div className="relative mt-1">
+                  <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-300 pointer-events-none" size={14} />
+                  <input type="text" placeholder={formData.lokasi || "CARI LOKASI RAK..."}
+                    className="w-full p-3 pl-9 bg-slate-50 border-none rounded-xl outline-none focus:ring-2 focus:ring-orange-500 text-xs font-bold uppercase"
+                    value={searchLoc}
+                    onChange={(e) => { setSearchLoc(e.target.value); setShowLocList(e.target.value.length > 0); }} />
+                </div>
+                {formData.lokasi && (
+                  <p className="text-[9px] font-black text-orange-600 mt-1 ml-1">✓ Dipilih: {formData.lokasi}</p>
+                )}
+                {showLocList && (
+                  <div className="absolute z-50 w-full mt-1 bg-white border border-slate-100 shadow-xl rounded-xl overflow-hidden max-h-40 overflow-y-auto text-xs font-bold uppercase">
+                    {filteredLocations?.map((loc) => (
+                      <div key={loc.id} className="p-3 hover:bg-orange-50 cursor-pointer border-b border-slate-50 last:border-none"
+                        onClick={() => { setFormData({ ...formData, lokasi: loc.nama }); setSearchLoc(""); setShowLocList(false); }}>
+                        {loc.nama}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+
+          <div className="space-y-2 md:col-span-2">
+            <div className="flex items-center gap-2 text-emerald-600 px-2">
+              <Wallet size={16} />
+              <span className="text-[10px] font-black uppercase tracking-widest">Finansial & Stok</span>
+            </div>
+            <div className="bg-white p-3 rounded-xl border border-slate-100 shadow-sm space-y-3">
+              <div>
+                <label className="text-[9px] font-bold text-slate-400 ml-1 uppercase">Jumlah Stok</label>
+                <input required type="number" placeholder="0"
+                  className="w-full mt-1 p-3 bg-slate-50 border-none rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-xs font-black"
+                  value={formData.stok} onChange={(e) => setFormData({ ...formData, stok: e.target.value })} />
+              </div>
+              <div>
+                <label className="text-[9px] font-bold text-slate-400 ml-1 uppercase">Harga Modal</label>
+                <div className="relative mt-1">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[10px] font-bold text-slate-300">Rp</span>
+                  <input type="text" className="w-full p-3 pl-9 bg-slate-50 border-none rounded-xl text-xs font-black outline-none focus:ring-2 focus:ring-emerald-500"
+                    placeholder="0" value={formData.hargaModal} onChange={(e) => setFormData({ ...formData, hargaModal: formatNumber(e.target.value) })} />
+                </div>
+              </div>
+              <div>
+                <label className="text-[9px] font-bold text-emerald-600 ml-1 uppercase">Harga Jual Utama</label>
+                <div className="relative mt-1">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[10px] font-bold text-emerald-300">Rp</span>
+                  <input required type="text"
+                    className="w-full p-3 pl-9 bg-slate-50 border-none rounded-xl text-xs font-black outline-none focus:ring-2 focus:ring-emerald-500 border-l-4 border-l-emerald-500"
+                    placeholder="0" value={formData.hargaJual} onChange={(e) => setFormData({ ...formData, hargaJual: formatNumber(e.target.value) })} />
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <button disabled={loading} className="w-full bg-slate-900 text-white p-4 rounded-xl font-black text-xs uppercase tracking-[0.15em] shadow-lg active:scale-95 transition-all flex items-center justify-center gap-2 disabled:bg-slate-300 mt-2">
+          {loading ? <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <Save size={18} />}
+          {loading ? "PROSES..." : "SIMPAN BARANG"}
+        </button>
+      </form>
+    </div>
+  );
+}
+
+
+
+### src/pages/AdminUsersPage.tsx ###
+import React, { useState, useEffect } from "react";
+import { db_cloud } from "@/lib/firebase";
+import { collection, getDocs, doc, updateDoc, deleteDoc, setDoc } from "firebase/firestore";
+import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword } from "firebase/auth";
+import { UserPlus, ShieldCheck, Trash2, Mail, Loader2, X, CheckCircle2, Fingerprint } from "lucide-react";
+import { getCookie } from "@/lib/auth";
+
+interface Staff {
+  id: string;
+  nama: string;
+  email: string;
+  role: "admin" | "staff";
+}
+
+export default function AdminUsersPage() {
+  const [staffList, setStaffList] = useState<Staff[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [newStaff, setNewStaff] = useState({ nama: "", email: "", password: "", role: "staff" as "admin" | "staff" });
+
+  const fetchStaff = async () => {
+    setLoading(true);
+    try {
+      const querySnapshot = await getDocs(collection(db_cloud, "users"));
+      const data = querySnapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() })) as Staff[];
+      setStaffList(data);
+    } catch (error) {
+      console.error("Error fetching staff:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => { fetchStaff(); }, []);
+
+  const handleAddStaff = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSaving(true);
+
+    // Simpan kredensial admin yang sedang login
+    const adminEmail = getCookie('_ae') || '';
+    const adminPassword = prompt("Masukkan password Anda (admin) untuk konfirmasi:") || '';
+
+    try {
+      const auth = getAuth();
+      // Buat user baru
+      const userCredential = await createUserWithEmailAndPassword(auth, newStaff.email, newStaff.password);
+      const newUser = userCredential.user;
+
+      await setDoc(doc(db_cloud, "users", newUser.uid), {
+        nama: newStaff.nama.toUpperCase(),
+        email: newStaff.email,
+        role: newStaff.role,
+        createdAt: new Date().toISOString()
+      });
+
+      // Re-login sebagai admin agar sesi tidak tergantikan
+      if (adminEmail && adminPassword) {
+        await signInWithEmailAndPassword(auth, adminEmail, adminPassword);
+      }
+
+      setIsModalOpen(false);
+      setNewStaff({ nama: "", email: "", password: "", role: "staff" });
+      fetchStaff();
+      alert("Staff berhasil ditambahkan!");
+    } catch (error: any) {
+      alert("Gagal: " + error.message);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const toggleRole = async (id: string, currentRole: string) => {
+    const newRole = currentRole === "admin" ? "staff" : "admin";
+    try {
+      await updateDoc(doc(db_cloud, "users", id), { role: newRole });
+      fetchStaff();
+    } catch {
+      alert("Gagal mengubah hak akses");
+    }
+  };
+
+  const handleDelete = async (id: string) => {
+    if (window.confirm("Hapus akses staff ini secara permanen?")) {
+      try {
+        await deleteDoc(doc(db_cloud, "users", id));
+        fetchStaff();
+      } catch {
+        alert("Gagal menghapus data");
+      }
+    }
+  };
+
+  if (loading) return (
+    <div className="flex flex-col items-center justify-center min-h-[60vh]">
+      <div className="relative">
+        <Loader2 className="animate-spin text-blue-600" size={32} />
+        <Fingerprint className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-blue-100" size={16} />
+      </div>
+      <p className="text-[10px] font-bold text-slate-400 mt-4 uppercase tracking-widest">Memuat Data...</p>
+    </div>
+  );
+
+  return (
+    <div className="p-2 pb-24 max-w-full mx-auto">
+      <div className="flex justify-between items-center mb-6 px-2">
+        <div>
+          <h1 className="text-xl font-black text-slate-800 tracking-tight uppercase">Staff</h1>
+          <p className="text-[9px] font-bold text-blue-600 uppercase tracking-widest">Akses Kontrol</p>
+        </div>
+        <button onClick={() => setIsModalOpen(true)} className="bg-blue-600 text-white p-2.5 rounded-xl shadow-md active:scale-95 transition-all">
+          <UserPlus size={18} />
+        </button>
+      </div>
+      <div className="space-y-2">
+        {staffList.map((staff) => (
+          <div key={staff.id} className="bg-white p-3 rounded-xl border border-slate-100 shadow-sm">
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-3">
+                <div className={`w-10 h-10 rounded-lg flex items-center justify-center font-black text-sm ${staff.role === 'admin' ? 'bg-blue-50 text-blue-600' : 'bg-slate-50 text-slate-400'}`}>
+                  {staff.nama.substring(0, 2).toUpperCase()}
+                </div>
+                <div>
+                  <h3 className="font-bold text-slate-800 text-xs leading-none mb-1 uppercase">{staff.nama}</h3>
+                  <div className="flex items-center gap-1 text-slate-400">
+                    <Mail size={10} />
+                    <span className="text-[9px] font-medium">{staff.email}</span>
+                  </div>
+                </div>
+              </div>
+              <div className={`px-2 py-0.5 rounded-md text-[8px] font-black uppercase tracking-wider ${staff.role === 'admin' ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-500'}`}>
+                {staff.role}
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-2 border-t border-slate-50 pt-3">
+              <button onClick={() => toggleRole(staff.id, staff.role)} className="flex items-center justify-center gap-2 p-2 rounded-lg bg-slate-50 text-slate-600 text-[10px] font-bold uppercase">
+                <ShieldCheck size={14} /> Role
+              </button>
+              <button onClick={() => handleDelete(staff.id)} className="flex items-center justify-center gap-2 p-2 rounded-lg bg-red-50 text-red-500 text-[10px] font-bold uppercase">
+                <Trash2 size={14} /> Hapus
+              </button>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {isModalOpen && (
+        <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center p-4">
+          <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => !isSaving && setIsModalOpen(false)} />
+          <form onSubmit={handleAddStaff} className="relative bg-white w-full max-w-sm rounded-2xl shadow-2xl overflow-hidden p-6">
+            <div className="flex justify-between items-center mb-5">
+              <h2 className="text-base font-black text-slate-800 uppercase italic">Tambah Staff</h2>
+              <button type="button" onClick={() => setIsModalOpen(false)} className="p-1.5 bg-slate-50 rounded-lg text-slate-300">
+                <X size={18} />
+              </button>
+            </div>
+            <div className="space-y-3">
+              <input required placeholder="NAMA LENGKAP"
+                className="w-full p-3 bg-slate-50 border-none rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-xs font-bold uppercase"
+                value={newStaff.nama} onChange={(e) => setNewStaff({ ...newStaff, nama: e.target.value })} />
+              <input required type="email" placeholder="EMAIL"
+                className="w-full p-3 bg-slate-50 border-none rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-xs font-bold"
+                value={newStaff.email} onChange={(e) => setNewStaff({ ...newStaff, email: e.target.value })} />
+              <input required type="password" placeholder="PASSWORD"
+                className="w-full p-3 bg-slate-50 border-none rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-xs font-bold"
+                value={newStaff.password} onChange={(e) => setNewStaff({ ...newStaff, password: e.target.value })} />
+              <select className="w-full p-3 bg-slate-50 border-none rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-xs font-black uppercase"
+                value={newStaff.role} onChange={(e) => setNewStaff({ ...newStaff, role: e.target.value as any })}>
+                <option value="staff">STAFF</option>
+                <option value="admin">ADMIN</option>
+              </select>
+            </div>
+            <button disabled={isSaving} className="w-full mt-5 bg-blue-600 text-white p-3.5 rounded-xl font-black text-xs uppercase tracking-widest active:scale-95 transition-all flex items-center justify-center gap-2">
+              {isSaving ? <Loader2 className="animate-spin" size={16} /> : <CheckCircle2 size={16} />}
+              {isSaving ? "PROSES..." : "SIMPAN STAFF"}
+            </button>
+          </form>
+        </div>
+      )}
+    </div>
+  );
+}
+
+
+
+### src/pages/CategoriesPage.tsx ###
+import React, { useState } from 'react';
+import { useLiveQuery } from 'dexie-react-hooks';
+import { db_local } from '@/lib/db';
+import { Plus, Trash2, Tag, Loader2 } from "lucide-react";
+
+export default function CategoriesPage() {
+  const [newCategory, setNewCategory] = useState("");
+  const categories = useLiveQuery(() => db_local.categories.toArray());
+
+  const addCategory = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newCategory) return;
+    try {
+      await db_local.categories.add({ nama: newCategory.toUpperCase() });
+      setNewCategory("");
+    } catch {
+      alert("Kategori sudah ada!");
+    }
+  };
+
+  const deleteCategory = async (id: number) => {
+    if (confirm("Hapus kategori ini?")) await db_local.categories.delete(id);
+  };
+
+  return (
+    <div className="p-2 pb-24 max-w-full mx-auto">
+      <form onSubmit={addCategory} className="mb-6 flex gap-2">
+        <input type="text" placeholder="NAMA KATEGORI BARU..."
+          className="flex-1 p-3 bg-white border border-slate-100 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 text-xs font-bold uppercase shadow-sm"
+          value={newCategory} onChange={(e) => setNewCategory(e.target.value.toUpperCase())} />
+        <button className="bg-blue-600 text-white px-5 rounded-xl shadow-md active:scale-95 transition-all">
+          <Plus size={20} />
+        </button>
+      </form>
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
+        {categories ? (
+          categories.map((cat) => (
+            <div key={cat.id} className="bg-white p-3 rounded-xl border border-slate-100 shadow-sm flex items-center justify-between hover:border-blue-200 transition-colors">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 bg-slate-50 rounded-lg flex items-center justify-center text-blue-600 shrink-0"><Tag size={16} /></div>
+                <span className="font-bold text-slate-700 text-xs tracking-tight uppercase">{cat.nama}</span>
+              </div>
+              <button onClick={() => deleteCategory(cat.id!)} className="p-2 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all">
+                <Trash2 size={16} />
+              </button>
+            </div>
+          ))
+        ) : (
+          <div className="col-span-full flex flex-col items-center justify-center p-10">
+            <Loader2 className="animate-spin text-blue-600 mb-2" />
+            <span className="text-[10px] font-bold text-slate-400 uppercase">Sinkronisasi...</span>
+          </div>
+        )}
+      </div>
+      {categories?.length === 0 && (
+        <div className="text-center py-10 bg-slate-50 rounded-xl border-2 border-dashed border-slate-200">
+          <p className="text-slate-400 font-bold text-xs uppercase">Belum ada kategori</p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+
+
+### src/pages/DashboardPage.tsx ###
+import { useLiveQuery } from 'dexie-react-hooks';
+import { db_local } from '@/lib/db';
+import { useNavigate } from 'react-router-dom';
+import {
+  Package, Layers, AlertTriangle, TrendingUp,
+  History, ArrowUpRight, ArrowDownRight, Loader2,
+  Box, ChevronRight
+} from "lucide-react";
+
+export default function DashboardPage() {
+  const navigate = useNavigate();
+  const products = useLiveQuery(() => db_local.products.toArray());
+  const categories = useLiveQuery(() => db_local.categories.toArray());
+
+  const totalStok = products?.reduce((acc, item) => acc + (Number(item.stok) || 0), 0) || 0;
+  const totalVariasi = products?.length || 0;
+  const totalCat = categories?.length || 0;
+  const lowStockItems = products?.filter(item => Number(item.stok) <= 5) || [];
+  const recentUpdates = products
+    ? [...products].sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0)).slice(0, 3)
+    : [];
+
+  if (!products || !categories) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[60vh] text-slate-300">
+        <Loader2 className="animate-spin mb-3 text-blue-600" size={32} />
+        <p className="text-[10px] font-black uppercase tracking-[0.3em]">Sinkronisasi Sistem...</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="p-3 pb-24 max-w-2xl mx-auto space-y-6">
+      <header className="px-1 flex justify-between items-end">
+        <div>
+          <h1 className="font-black text-slate-800 tracking-tight text-xs uppercase italic">Control Panel</h1>
+          <p className="text-[9px] font-bold text-blue-600 uppercase tracking-widest mt-0.5">Ringkasan Gudang Hari Ini</p>
+        </div>
+        <div className="text-right">
+          <p className="text-[14px] font-black text-slate-800">100%</p>
+          <p className="text-[8px] font-bold text-emerald-500 uppercase tracking-tighter">Online Mode</p>
+        </div>
+      </header>
+
+      <div className="grid grid-cols-2 gap-3">
+        <div className="bg-white p-4 rounded-xl border border-slate-100 shadow-sm relative overflow-hidden group">
+          <div className="relative z-10 space-y-3">
+            <div className="w-9 h-9 bg-blue-50 text-blue-600 rounded-lg flex items-center justify-center">
+              <Package size={20} />
+            </div>
+            <div>
+              <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">Total Unit</p>
+              <h2 className="text-2xl font-black text-slate-800 tracking-tight">{totalStok.toLocaleString('id-ID')}</h2>
+            </div>
+            <div className="flex items-center text-emerald-500 text-[9px] font-black uppercase">
+              <ArrowUpRight size={10} className="mr-1" />
+              <span>{totalVariasi} SKU Terdaftar</span>
+            </div>
+          </div>
+          <Box size={80} className="absolute -right-4 -bottom-4 text-slate-50 opacity-50 group-hover:scale-110 transition-transform" />
+        </div>
+
+        <div className="bg-white p-4 rounded-xl border border-slate-100 shadow-sm relative overflow-hidden group">
+          <div className="relative z-10 space-y-3">
+            <div className="w-9 h-9 bg-purple-50 text-purple-600 rounded-lg flex items-center justify-center">
+              <Layers size={20} />
+            </div>
+            <div>
+              <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">Kategori</p>
+              <h2 className="text-2xl font-black text-slate-800 tracking-tight">{totalCat}</h2>
+            </div>
+            <p className="text-[9px] font-black text-slate-400 uppercase">Aktif & Terjaga</p>
+          </div>
+          <Layers size={80} className="absolute -right-4 -bottom-4 text-slate-50 opacity-50 group-hover:scale-110 transition-transform" />
+        </div>
+      </div>
+
+      <section className="space-y-3">
+        <div className="flex items-center gap-2 px-1 text-slate-800">
+          <AlertTriangle size={14} className="text-orange-500" />
+          <h3 className="font-black text-[11px] uppercase tracking-wider">Perlu Perhatian</h3>
+        </div>
+        {lowStockItems.length > 0 ? (
+          <div onClick={() => navigate('/products')} className="bg-red-50 border border-red-100 rounded-xl p-3 flex items-center gap-3 cursor-pointer active:scale-95 transition-all">
+            <div className="bg-white p-2.5 rounded-lg text-red-500 shadow-sm border border-red-50">
+              <AlertTriangle size={18} strokeWidth={3} />
+            </div>
+            <div className="flex-1">
+              <p className="font-black text-slate-800 text-[11px] leading-tight uppercase">Stok Kritis Terdeteksi!</p>
+              <p className="text-[9px] text-red-600 mt-0.5 uppercase font-bold">Ada {lowStockItems.length} item hampir habis di gudang.</p>
+            </div>
+            <ChevronRight size={16} className="text-red-300" />
+          </div>
+        ) : (
+          <div className="p-3 bg-emerald-50 border border-emerald-100 rounded-xl flex items-center justify-center gap-2">
+            <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse" />
+            <p className="text-[9px] font-black text-emerald-600 uppercase tracking-widest">Gudang dalam kondisi aman</p>
+          </div>
+        )}
+      </section>
+
+      <section className="space-y-3">
+        <div className="flex items-center justify-between px-1">
+          <div className="flex items-center gap-2">
+            <History size={14} className="text-blue-600" />
+            <h3 className="font-black text-[11px] uppercase tracking-wider">Update Terakhir</h3>
+          </div>
+          <button onClick={() => navigate('/products')} className="text-[9px] font-black text-blue-600 uppercase">Lihat Semua</button>
+        </div>
+        <div className="space-y-2">
+          {recentUpdates.length > 0 ? recentUpdates.map((item) => (
+            <div key={item.id} className="flex items-center justify-between p-3 bg-white border border-slate-50 rounded-xl hover:border-blue-100 transition-all">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="bg-slate-50 text-slate-400 p-2 rounded-lg">
+                  <ArrowDownRight size={14} />
+                </div>
+                <div className="min-w-0">
+                  <p className="font-black text-slate-800 text-[10px] uppercase truncate">{item.nama}</p>
+                  <p className="text-[8px] text-slate-400 font-bold uppercase tracking-wider mt-0.5">Lokasi: {item.lokasi || 'N/A'}</p>
+                </div>
+              </div>
+              <div className="text-right shrink-0 ml-4">
+                <p className="text-[11px] font-black text-blue-600">{item.stok}</p>
+                <p className="text-[7px] text-slate-300 font-black uppercase">Unit</p>
+              </div>
+            </div>
+          )) : (
+            <div className="text-center py-6 bg-slate-50 rounded-xl border border-dashed border-slate-200">
+              <p className="text-[9px] text-slate-400 font-black uppercase tracking-widest italic">Belum ada aktivitas</p>
+            </div>
+          )}
+        </div>
+      </section>
+
+      <button className="w-full bg-slate-900 text-white p-4 rounded-xl flex items-center justify-between group relative overflow-hidden active:scale-[0.98] transition-all shadow-xl shadow-slate-200">
+        <div className="relative z-10 flex items-center gap-3 text-left">
+          <div className="bg-white/10 p-2 rounded-lg">
+            <TrendingUp size={18} />
+          </div>
+          <div>
+            <p className="font-black text-[11px] uppercase tracking-widest">Laporan Mutasi</p>
+            <p className="text-[8px] opacity-50 uppercase font-bold">Segera Hadir</p>
+          </div>
+        </div>
+        <ArrowUpRight className="relative z-10 opacity-50" size={20} />
+        <div className="absolute -right-4 -bottom-4 w-20 h-20 bg-blue-600 rounded-full blur-3xl opacity-20 group-hover:opacity-40 transition-opacity"></div>
+      </button>
+
+      <div className="pt-6 pb-2 text-center">
+        <span className="text-[8px] font-black text-slate-300 uppercase tracking-[0.4em]">TokoMekkah V2.0 — Vite Edition</span>
+      </div>
+    </div>
+  );
+}

@@ -1,0 +1,575 @@
+### src/App.tsx ###
+import React from 'react';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { getCookie } from '@/lib/auth';
+
+// Layouts
+import AuthLayout from '@/components/AuthLayout';
+import DashboardLayout from '@/components/DashboardLayout';
+
+// Pages
+import LoginPage from '@/pages/LoginPage';
+import DashboardPage from '@/pages/DashboardPage';
+import ProductsPage from '@/pages/ProductsPage';
+import AddProductPage from '@/pages/AddProductPage';
+import EditProductPage from '@/pages/EditProductPage';
+import CategoriesPage from '@/pages/CategoriesPage';
+import PublishersPage from '@/pages/PublishersPage';
+import LocationsPage from '@/pages/LocationsPage';
+import AdminUsersPage from '@/pages/AdminUsersPage';
+
+// Guard: cek apakah sudah login
+function RequireAuth({ children }: { children: React.ReactNode }) {
+  const role = getCookie('user-role');
+  if (!role) return <Navigate to="/login" replace />;
+  return <>{children}</>;
+}
+
+// Guard: cek apakah sudah login tapi coba akses login lagi
+function RequireGuest({ children }: { children: React.ReactNode }) {
+  const role = getCookie('user-role');
+  if (role) return <Navigate to="/" replace />;
+  return <>{children}</>;
+}
+
+export default function App() {
+  return (
+    <BrowserRouter>
+      <Routes>
+        {/* Auth Routes */}
+        <Route element={<AuthLayout />}>
+          <Route
+            path="/login"
+            element={
+              <RequireGuest>
+                <LoginPage />
+              </RequireGuest>
+            }
+          />
+        </Route>
+
+        {/* Dashboard Routes */}
+        <Route
+          element={
+            <RequireAuth>
+              <DashboardLayout />
+            </RequireAuth>
+          }
+        >
+          <Route path="/" element={<DashboardPage />} />
+          <Route path="/products" element={<ProductsPage />} />
+          <Route path="/products/add" element={<AddProductPage />} />
+          <Route path="/products/edit/:id" element={<EditProductPage />} />
+          <Route path="/categories" element={<CategoriesPage />} />
+          <Route path="/publishers" element={<PublishersPage />} />
+          <Route path="/locations" element={<LocationsPage />} />
+          <Route path="/admin/users" element={<AdminUsersPage />} />
+        </Route>
+
+        {/* Fallback */}
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </BrowserRouter>
+  );
+}
+
+
+
+### src/index.css ###
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+* {
+  -webkit-tap-highlight-color: transparent;
+}
+
+body {
+  overscroll-behavior-y: contain;
+  -webkit-font-smoothing: antialiased;
+}
+
+::-webkit-scrollbar {
+  width: 5px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #e2e8f0;
+  border-radius: 10px;
+}
+
+
+
+### src/main.tsx ###
+import React from 'react'
+import ReactDOM from 'react-dom/client'
+import App from './App'
+import './index.css'
+
+ReactDOM.createRoot(document.getElementById('root')!).render(
+  <React.StrictMode>
+    <App />
+  </React.StrictMode>
+)
+
+
+
+###  src/components/AuthLayout.tsx ###
+import { Outlet } from 'react-router-dom';
+
+export default function AuthLayout() {
+  return (
+    <main className="w-full min-h-screen bg-slate-50 flex items-center justify-center relative overflow-hidden">
+      <div className="absolute inset-0 pointer-events-none">
+        <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-blue-100/50 rounded-full blur-[120px]" />
+        <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-orange-100/50 rounded-full blur-[120px]" />
+      </div>
+      <section className="w-full relative z-10 flex items-center justify-center p-4">
+        <Outlet />
+      </section>
+      <div className="absolute bottom-6 w-full text-center">
+        <p className="text-[10px] font-black text-slate-300 uppercase tracking-[0.5em]">
+          Secure Authentication Portal
+        </p>
+      </div>
+    </main>
+  );
+}
+
+
+
+###  src/components/DashboardLayout.tsx ###
+import { Outlet } from 'react-router-dom';
+import Sidebar from '@/components/Sidebar';
+import SyncManager from '@/components/SyncManager';
+
+export default function DashboardLayout() {
+  return (
+    <>
+      <SyncManager />
+      <div className="flex flex-col md:flex-row min-h-screen bg-slate-50 text-slate-900 font-sans">
+        <Sidebar />
+        <main className="flex-1 w-full min-h-screen relative overflow-x-hidden">
+          <div className="max-w-5xl mx-auto p-2 md:p-6 lg:p-8">
+            <section className="bg-white/70 backdrop-blur-sm rounded-[2rem] md:rounded-[2.5rem] shadow-xl shadow-slate-200/50 border border-white min-h-[90vh] relative overflow-hidden">
+              <div className="absolute top-0 right-0 w-32 h-32 bg-blue-50/50 rounded-full blur-3xl -mr-16 -mt-16 pointer-events-none" />
+              <div className="absolute bottom-0 left-0 w-32 h-32 bg-orange-50/50 rounded-full blur-3xl -ml-16 -mb-16 pointer-events-none" />
+              <div className="relative z-10 p-1 md:p-2">
+                <Outlet />
+              </div>
+            </section>
+          </div>
+        </main>
+      </div>
+    </>
+  );
+}
+
+
+
+###  src/components/Sidebar.tsx ###
+import React, { useState, useEffect } from 'react';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { getCookie, deleteCookie } from '@/lib/auth';
+import {
+  LayoutDashboard, Package, PlusCircle, Users,
+  Settings, Menu, X, LogOut, Layers, BookOpen,
+  MapPin, RefreshCw, ShieldCheck
+} from "lucide-react";
+
+export default function Sidebar() {
+  const [isOpen, setIsOpen] = useState(false);
+  const [role, setRole] = useState<string | null>(null);
+  const location = useLocation();
+  const navigate = useNavigate();
+
+  const handleHardReset = async () => {
+    const confirmUpdate = confirm("💡 Perbarui sistem ke versi terbaru?");
+    if (!confirmUpdate) return;
+
+    if ('serviceWorker' in navigator) {
+      try {
+        const cacheNames = await caches.keys();
+        await Promise.all(cacheNames.map(name => caches.delete(name)));
+        const registrations = await navigator.serviceWorker.getRegistrations();
+        for (const reg of registrations) await reg.unregister();
+        window.location.href = window.location.origin + '?reload=' + Date.now();
+      } catch {
+        window.location.reload();
+      }
+    } else {
+      window.location.reload();
+    }
+  };
+
+  useEffect(() => {
+    const userRole = getCookie("user-role");
+    setRole(userRole || 'staff');
+  }, [location.pathname]);
+
+  const handleLogout = () => {
+    if (!confirm("Yakin ingin keluar?")) return;
+    deleteCookie("user-role");
+    navigate("/login");
+  };
+
+  const menuItems = [
+    {
+      group: "Utama",
+      items: [
+        { name: "Beranda", icon: LayoutDashboard, path: "/" },
+        { name: "Daftar Barang", icon: Package, path: "/products" },
+        { name: "Input Barang", icon: PlusCircle, path: "/products/add" },
+      ]
+    },
+    ...(role === 'admin' ? [{
+      group: "Master Data",
+      items: [
+        { name: "Kategori Produk", icon: Layers, path: "/categories" },
+        { name: "Daftar Penerbit", icon: BookOpen, path: "/publishers" },
+        { name: "Lokasi Rak", icon: MapPin, path: "/locations" },
+      ]
+    }] : []),
+    ...(role === 'admin' ? [{
+      group: "Sistem",
+      items: [
+        { name: "Manajemen Staff", icon: Users, path: "/admin/users" },
+        { name: "Pengaturan", icon: Settings, path: "/settings" },
+      ]
+    }] : [])
+  ];
+
+  return (
+    <>
+      {/* Mobile Top Bar */}
+      <header className="md:hidden fixed top-0 left-0 w-full bg-white/80 backdrop-blur-lg border-b border-slate-100 p-4 flex items-center justify-between z-[100] shadow-sm">
+        <div className="flex items-center gap-3">
+          <button onClick={() => setIsOpen(true)} className="p-2.5 bg-slate-50 rounded-xl text-slate-600 active:scale-90 transition-all">
+            <Menu size={20} />
+          </button>
+          <div className="flex flex-col">
+            <span className="text-[11px] font-black uppercase tracking-tighter text-slate-800">Toko Mekkah</span>
+            <span className="text-[8px] font-bold text-blue-600 uppercase tracking-widest leading-none">Inventory System</span>
+          </div>
+        </div>
+        <button onClick={handleHardReset} className="p-2.5 text-slate-400 active:text-blue-600 transition-colors">
+          <RefreshCw size={18} />
+        </button>
+      </header>
+
+      {/* Spacer */}
+      <div className="h-[65px] md:hidden w-full"></div>
+
+      {/* Overlay */}
+      {isOpen && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[110] md:hidden" onClick={() => setIsOpen(false)} />
+      )}
+
+      {/* Sidebar */}
+      <aside className={`
+        fixed md:sticky top-0 left-0 h-screen bg-white md:bg-slate-50/50 border-r border-slate-200 z-[120]
+        transition-all duration-300 w-[280px] flex flex-col
+        ${isOpen ? 'translate-x-0 shadow-2xl' : '-translate-x-full md:translate-x-0'}
+      `}>
+        <div className="p-8 pb-4">
+          <div className="flex items-center justify-between mb-2">
+            <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center text-white shadow-lg shadow-blue-200">
+              <ShieldCheck size={24} />
+            </div>
+            <button onClick={() => setIsOpen(false)} className="md:hidden p-2 text-slate-400">
+              <X size={20} />
+            </button>
+          </div>
+          <div className="flex flex-col">
+            <h2 className="font-black text-slate-800 text-xl tracking-tighter uppercase leading-tight">Toko Mekkah</h2>
+            <div className="flex items-center gap-2 mt-1">
+              <span className={`text-[9px] font-black px-2 py-0.5 rounded-full uppercase tracking-widest ${role === 'admin' ? 'bg-orange-100 text-orange-600' : 'bg-blue-100 text-blue-600'}`}>
+                {role} Access
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <nav className="flex-1 overflow-y-auto px-4 mt-6 space-y-8">
+          {menuItems.map((group, gIdx) => (
+            <div key={gIdx}>
+              <p className="px-4 text-[9px] font-black text-slate-400 uppercase tracking-[0.3em] mb-4">{group.group}</p>
+              <div className="space-y-1.5">
+                {group.items.map((item) => {
+                  const Icon = item.icon;
+                  const isActive = location.pathname === item.path;
+                  return (
+                    <Link key={item.path} to={item.path} onClick={() => setIsOpen(false)}
+                      className={`
+                        flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 group
+                        ${isActive
+                          ? "bg-slate-900 text-white shadow-xl shadow-slate-200"
+                          : "text-slate-500 hover:bg-white hover:text-blue-600 hover:shadow-sm"
+                        }
+                      `}>
+                      <Icon size={18} strokeWidth={isActive ? 2.5 : 2} className={isActive ? "text-blue-400" : "group-hover:scale-110 transition-transform"} />
+                      <span className={`text-[11px] uppercase tracking-wider ${isActive ? "font-black" : "font-bold"}`}>{item.name}</span>
+                    </Link>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
+        </nav>
+
+        <div className="p-4 mt-auto space-y-2">
+          <button onClick={handleHardReset} className="flex items-center gap-3 w-full px-4 py-3 text-slate-400 hover:text-blue-600 transition-colors text-[10px] font-bold uppercase tracking-widest group">
+            <RefreshCw size={14} className="group-hover:rotate-180 transition-transform duration-700" />
+            Pembaruan Sistem
+          </button>
+          <button onClick={handleLogout} className="flex items-center justify-center gap-3 w-full p-4 text-white bg-red-500 hover:bg-red-600 rounded-2xl transition-all shadow-lg shadow-red-100 active:scale-95">
+            <LogOut size={18} />
+            <span className="text-[10px] font-black uppercase tracking-[0.2em]">Logout</span>
+          </button>
+        </div>
+      </aside>
+    </>
+  );
+}
+
+
+
+###  src/components/SyncManager.tsx ###
+import { useEffect } from "react";
+import { db_cloud } from "@/lib/firebase";
+import { collection, onSnapshot, doc, setDoc, deleteDoc } from "firebase/firestore";
+import { db_local } from "@/lib/db";
+
+let isIncomingSync = false;
+let syncCount = 0; // Perbaikan: gunakan counter agar lebih aman dari race condition
+
+export default function SyncManager() {
+  useEffect(() => {
+    const setupDownlink = (collectionName: string, localTable: any, keyField: string) => {
+      const colRef = collection(db_cloud, collectionName);
+
+      return onSnapshot(colRef, (snapshot) => {
+        if (snapshot.metadata.hasPendingWrites) return;
+
+        snapshot.docChanges().forEach(async (change) => {
+          const firestoreData = change.doc.data();
+
+          const existingLocalData = await localTable
+            .where(keyField)
+            .equals(firestoreData[keyField])
+            .first();
+
+          if (change.type === "added" || change.type === "modified") {
+            try {
+              syncCount++;
+              isIncomingSync = true;
+              await localTable.put({
+                ...firestoreData,
+                id: existingLocalData?.id,
+              });
+            } catch (err) {
+              console.error(`Sync Error [Downlink ${collectionName}]:`, err);
+            } finally {
+              syncCount--;
+              if (syncCount === 0) isIncomingSync = false;
+            }
+          }
+
+          if (change.type === "removed" && existingLocalData?.id) {
+            try {
+              syncCount++;
+              isIncomingSync = true;
+              await localTable.delete(existingLocalData.id);
+            } catch (err) {
+              console.error(`Sync Error [Delete ${collectionName}]:`, err);
+            } finally {
+              syncCount--;
+              if (syncCount === 0) isIncomingSync = false;
+            }
+          }
+        });
+      });
+    };
+
+    // Uplink hooks dengan cleanup yang benar
+    const setupUplink = (tableName: string, localTable: any, keyField: string) => {
+      const creatingHook = localTable.hook('creating', (_primKey: any, obj: any) => {
+        if (isIncomingSync) return;
+        const docId = obj[keyField]?.toString().trim();
+        if (docId) {
+          setDoc(doc(db_cloud, tableName, docId), {
+            ...obj,
+            updatedAt: obj.updatedAt || Date.now()
+          });
+        }
+      });
+
+      const updatingHook = localTable.hook('updating', (mods: any, _primKey: any, obj: any) => {
+        if (isIncomingSync) return;
+        const docId = obj[keyField]?.toString().trim();
+        if (docId) {
+          setDoc(doc(db_cloud, tableName, docId), {
+            ...obj,
+            ...mods,
+            updatedAt: Date.now()
+          }, { merge: true });
+        }
+      });
+
+      const deletingHook = localTable.hook('deleting', (_primKey: any, obj: any) => {
+        if (isIncomingSync) return;
+        if (obj && obj[keyField]) {
+          const docId = obj[keyField].toString().trim();
+          deleteDoc(doc(db_cloud, tableName, docId));
+        }
+      });
+
+      // Return cleanup function
+      return () => {
+        creatingHook.unsubscribe();
+        updatingHook.unsubscribe();
+        deletingHook.unsubscribe();
+      };
+    };
+
+    // Setup semua listener
+    const unsubProd = setupDownlink("products", db_local.products, "kode");
+    const unsubCat = setupDownlink("categories", db_local.categories, "nama");
+    const unsubPub = setupDownlink("publishers", db_local.publishers, "nama");
+    const unsubStaff = setupDownlink("staff", db_local.staff, "nama");
+    const unsubLoc = setupDownlink("locations", db_local.locations, "nama");
+
+    const cleanupProd = setupUplink("products", db_local.products, "kode");
+    const cleanupCat = setupUplink("categories", db_local.categories, "nama");
+    const cleanupPub = setupUplink("publishers", db_local.publishers, "nama");
+    const cleanupStaff = setupUplink("staff", db_local.staff, "nama");
+    const cleanupLoc = setupUplink("locations", db_local.locations, "nama");
+
+    return () => {
+      // Cleanup downlink
+      unsubProd(); unsubCat(); unsubPub(); unsubStaff(); unsubLoc();
+      // Cleanup uplink hooks (perbaikan dari versi Next.js!)
+      cleanupProd(); cleanupCat(); cleanupPub(); cleanupStaff(); cleanupLoc();
+    };
+  }, []);
+
+  return null;
+}
+
+
+
+### src/lib/auth.ts ###
+// Helper untuk manajemen cookie auth
+// Di Vite/SPA tidak ada Next.js cookies, kita pakai document.cookie langsung
+
+export const setCookie = (name: string, value: string, days = 7) => {
+  const expires = new Date();
+  expires.setTime(expires.getTime() + days * 24 * 60 * 60 * 1000);
+  document.cookie = `${name}=${value};expires=${expires.toUTCString()};path=/;SameSite=Lax`;
+};
+
+export const getCookie = (name: string): string | null => {
+  const nameEQ = name + "=";
+  const ca = document.cookie.split(';');
+  for (let i = 0; i < ca.length; i++) {
+    let c = ca[i].trim();
+    if (c.indexOf(nameEQ) === 0) return c.substring(nameEQ.length, c.length);
+  }
+  return null;
+};
+
+export const deleteCookie = (name: string) => {
+  document.cookie = `${name}=;expires=Thu, 01 Jan 1970 00:00:00 UTC;path=/;`;
+};
+
+
+
+### src/lib/db.ts ###
+import Dexie, { Table } from 'dexie';
+
+export interface Product {
+  id?: number;
+  nama: string;
+  kode: string;
+  penerbit: string;
+  kategori: string;
+  lokasi: string;
+  hargaModal: number;
+  hargaJual: number;
+  stok: number;
+  deskripsi?: string;
+  updatedAt: number;
+}
+
+export interface Category {
+  id?: number;
+  nama: string;
+}
+
+export interface Publisher {
+  id?: number;
+  nama: string;
+}
+
+export interface Location {
+  id?: number;
+  nama: string;
+}
+
+export interface Staff {
+  id?: number;
+  nama: string;
+  jabatan: string;
+  phone: string;
+  status: string;
+  updatedAt: number;
+}
+
+export class TokoMekkahDatabase extends Dexie {
+  products!: Table<Product>;
+  categories!: Table<Category>;
+  publishers!: Table<Publisher>;
+  locations!: Table<Location>;
+  staff!: Table<Staff>;
+
+  constructor() {
+    super('TokoMekkahDB');
+    this.version(5).stores({
+      products: '++id, nama, kode, kategori, penerbit, updatedAt',
+      categories: '++id, &nama',
+      publishers: '++id, &nama',
+      locations: '++id, &nama',
+      staff: '++id, nama, jabatan, phone'
+    });
+  }
+}
+
+export const db_local = new TokoMekkahDatabase();
+
+
+
+### src/lib/firebase.ts ###
+import { initializeApp, getApps, getApp } from "firebase/app";
+import { getFirestore } from "firebase/firestore";
+import { getAuth } from "firebase/auth";
+
+// Di Vite, env variables menggunakan prefix VITE_ (bukan NEXT_PUBLIC_)
+const firebaseConfig = {
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+  databaseURL: import.meta.env.VITE_FIREBASE_DATABASE_URL,
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+  appId: import.meta.env.VITE_FIREBASE_APP_ID
+};
+
+const app_cloud = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
+
+export const db_cloud = getFirestore(app_cloud);
+export const auth_cloud = getAuth(app_cloud);
+export const auth = auth_cloud;
+export { app_cloud };
+

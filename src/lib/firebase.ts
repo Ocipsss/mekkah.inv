@@ -1,8 +1,8 @@
+/// <reference types="vite/client" />
 import { initializeApp, getApps, getApp } from "firebase/app";
 import { getFirestore } from "firebase/firestore";
 import { getAuth } from "firebase/auth";
 
-// Di Vite, env variables menggunakan prefix VITE_ (bukan NEXT_PUBLIC_)
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
   authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
